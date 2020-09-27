@@ -1,5 +1,12 @@
 # Prerequisites
 *.d
+*.c~
+*.cci
+*.workspace
+*.pdsbak
+*.atsln
+*.h~
+*.prj~
 
 # Object files
 *.o
