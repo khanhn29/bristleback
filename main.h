@@ -19,7 +19,7 @@
 #define TRUE 1
 #define FALSE 0
 
-#define TIMEOUT_ON_MODE 50 //Thoi gian giua moi lan gui adc
+#define TIMEOUT_ON_MODE 80 //Thoi gian giua moi lan gui adc
 #define TIMEOUT_STARTING_MODE 500 //Thoi gian bat quat sau khi nhan duoc tin hieu bat
 
 #define QUAT PORTC.0
