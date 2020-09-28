@@ -1,13 +1,16 @@
 RAM Allocation [bytes]
 Variable                                                                          Address   Size
 ------------------------------------------------------------------------------------------------
-g_temperature_not_ready_value                                                     0x051C       2
-g_led_control                                                                     0x051E       2
-g_connect_mode                                                                    0x0520       2
-g_uart_send_buf                                                                   0x0522      50
-prev_status                                                                       0x0554       1
-p_S1000026000                                                                     0x0555       2
-_seed                                                                             0x0557       4
+rx_buffer0                                                                        0x0516       8
+tx_buffer0                                                                        0x051E       8
+g_value_adc_0                                                                     0x0526       2
+g_count_adc_1                                                                     0x0528       2
+g_value_adc_1                                                                     0x052A       2
+g_temperature_not_ready_value                                                     0x052C       2
+g_led_control                                                                     0x052E       2
+g_connect_mode                                                                    0x0530       2
+g_uart_send_buf                                                                   0x0532      50
+_seed                                                                             0x0564       4
 
 EEPROM Allocation [bytes]
 Variable                                                                          Address   Size
@@ -17,38 +20,18 @@ Register Allocation
 Variable                                                                          Register  Size
 ------------------------------------------------------------------------------------------------
 g_alert_led_mode                                                                  R5           1
-g_count_adc_0                                                                     R6,R7        2
-g_value_adc_0                                                                     R8,R9        2
-g_count_adc_1                                                                     R10,R11      2
-g_value_adc_1                                                                     R12,R13      2
+rx_wr_index0                                                                      R4           1
+rx_rd_index0                                                                      R7           1
+rx_counter0                                                                       R6           1
+rx_buffer_overflow0                                                               R2.0      1bit
+tx_wr_index0                                                                      R9           1
+tx_rd_index0                                                                      R8           1
+tx_counter0                                                                       R11          1
+g_count_adc_0                                                                     R12,R13      2
 
 FLASH Allocation [words]
 Function                                                                          Address   Size
 ------------------------------------------------------------------------------------------------
-timer0_ovf_isr                                                                    0x000B4     30
-read_adc                                                                          0x000D2     14
-main                                                                              0x000E0    132
-get_status_led                                                                    0x00164     49
-send_string                                                                       0x00195     30
-perform_status_led                                                                0x001B3    149
-run_connect_mode                                                                  0x00248     75
-recieve_string                                                                    0x00293     43
-connect_avr                                                                       0x002BE     11
-turnoff                                                                           0x002C9     11
-strcasecmp                                                                        0x002D4     56
-execute_command                                                                   0x0030C     60
-memset                                                                            0x00348     16
-strlen                                                                            0x00358     12
-strlenf                                                                           0x00364     13
-strpbrkf                                                                          0x00371     23
-strspnf                                                                           0x00388     21
-strtok                                                                            0x0039D     66
-getchar                                                                           0x003DF      4
-putchar                                                                           0x003E3      7
-put_buff_G101                                                                     0x003EA     56
-_print_G101                                                                       0x00422    308
-sprintf                                                                           0x00556     52
-atoi                                                                              0x0058A     55
-isdigit                                                                           0x005C1      9
-isspace                                                                           0x005CA     11
-tolower                                                                           0x005D5      8
+usart0_rx_isr                                                                     0x000B5     31
+usart0_tx_isr                                                                     0x000D4     23
+main                                                                              0x000EB    102

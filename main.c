@@ -23,25 +23,133 @@ Data Stack size         : 1024
 
 #include <mega128.h>
 #include "main.h"
-#include <delay.h>
 #include <string.h>
+#include <delay.h>
 
 // Declare your global variables here
-enum alert_mode_e    g_alert_led_mode = no_fault;
+
+#define DATA_REGISTER_EMPTY (1<<UDRE0)
+#define RX_COMPLETE (1<<RXC0)
+#define FRAMING_ERROR (1<<FE0)
+#define PARITY_ERROR (1<<UPE0)
+#define DATA_OVERRUN (1<<DOR0)
+
+// USART0 Receiver buffer
+#define RX_BUFFER_SIZE0 8
+char rx_buffer0[RX_BUFFER_SIZE0];
+
+#if RX_BUFFER_SIZE0 <= 256
+unsigned char rx_wr_index0=0,rx_rd_index0=0;
+#else
+unsigned int rx_wr_index0=0,rx_rd_index0=0;
+#endif
+
+#if RX_BUFFER_SIZE0 < 256
+unsigned char rx_counter0=0;
+#else
+unsigned int rx_counter0=0;
+#endif
+
+// This flag is set on USART0 Receiver buffer overflow
+bit rx_buffer_overflow0;
+
+// USART0 Receiver interrupt service routine
+interrupt [USART0_RXC] void usart0_rx_isr(void)
+{
+char status,data;
+status=UCSR0A;
+data=UDR0;
+if ((status & (FRAMING_ERROR | PARITY_ERROR | DATA_OVERRUN))==0)
+   {
+   rx_buffer0[rx_wr_index0++]=data;
+#if RX_BUFFER_SIZE0 == 256
+   // special case for receiver buffer size=256
+   if (++rx_counter0 == 0) rx_buffer_overflow0=1;
+#else
+   if (rx_wr_index0 == RX_BUFFER_SIZE0) rx_wr_index0=0;
+   if (++rx_counter0 == RX_BUFFER_SIZE0)
+      {
+      rx_counter0=0;
+      rx_buffer_overflow0=1;
+      }
+#endif
+   }
+}
+
+#ifndef _DEBUG_TERMINAL_IO_
+// Get a character from the USART0 Receiver buffer
+#define _ALTERNATE_GETCHAR_
+#pragma used+
+char getchar(void)
+{
+char data;
+while (rx_counter0==0);
+data=rx_buffer0[rx_rd_index0++];
+#if RX_BUFFER_SIZE0 != 256
+if (rx_rd_index0 == RX_BUFFER_SIZE0) rx_rd_index0=0;
+#endif
+#asm("cli")
+--rx_counter0;
+#asm("sei")
+return data;
+}
+#pragma used-
+#endif
+
+// USART0 Transmitter buffer
+#define TX_BUFFER_SIZE0 8
+char tx_buffer0[TX_BUFFER_SIZE0];
+
+#if TX_BUFFER_SIZE0 <= 256
+unsigned char tx_wr_index0=0,tx_rd_index0=0;
+#else
+unsigned int tx_wr_index0=0,tx_rd_index0=0;
+#endif
+
+#if TX_BUFFER_SIZE0 < 256
+unsigned char tx_counter0=0;
+#else
+unsigned int tx_counter0=0;
+#endif
+
+// USART0 Transmitter interrupt service routine
+interrupt [USART0_TXC] void usart0_tx_isr(void)
+{
+if (tx_counter0)
+   {
+   --tx_counter0;
+   UDR0=tx_buffer0[tx_rd_index0++];
+#if TX_BUFFER_SIZE0 != 256
+   if (tx_rd_index0 == TX_BUFFER_SIZE0) tx_rd_index0=0;
+#endif
+   }
+}
+
+#ifndef _DEBUG_TERMINAL_IO_
+// Write a character to the USART0 Transmitter buffer
+#define _ALTERNATE_PUTCHAR_
+#pragma used+
+void putchar(char c)
+{
+while (tx_counter0 == TX_BUFFER_SIZE0);
+#asm("cli")
+if (tx_counter0 || ((UCSR0A & DATA_REGISTER_EMPTY)==0))
+   {
+   tx_buffer0[tx_wr_index0++]=c;
+#if TX_BUFFER_SIZE0 != 256
+   if (tx_wr_index0 == TX_BUFFER_SIZE0) tx_wr_index0=0;
+#endif
+   ++tx_counter0;
+   }
+else
+   UDR0=c;
+#asm("sei")
+}
+#pragma used-
+#endif
 
 // Standard Input/Output functions
 #include <stdio.h>
-
-// Timer 0 overflow interrupt service routine
-interrupt [TIM0_OVF] void timer0_ovf_isr(void)
-{
-// Place your code here
-   //Get status led then control led accordingly
-   get_status_led();
-   perform_status_led();
-   //Run connect mode
-   run_connect_mode();
-}
 
 // Voltage Reference: AREF pin
 #define ADC_VREF_TYPE ((0<<REFS1) | (0<<REFS0) | (0<<ADLAR))
@@ -63,7 +171,7 @@ return ADCW;
 void main(void)
 {
 // Declare your local variables here
-char recv_buf[MAX_RECIEVE_BUF];
+
 // Input/Output Ports initialization
 // Port A initialization
 // Function: Bit7=Out Bit6=In Bit5=In Bit4=In Bit3=In Bit2=In Bit1=In Bit0=In 
@@ -109,12 +217,11 @@ PORTG=(0<<PORTG4) | (0<<PORTG3) | (0<<PORTG2) | (0<<PORTG1) | (0<<PORTG0);
 
 // Timer/Counter 0 initialization
 // Clock source: System Clock
-// Clock value: 31.250 kHz
+// Clock value: Timer 0 Stopped
 // Mode: Normal top=0xFF
 // OC0 output: Disconnected
-// Timer Period: 8.192 ms
 ASSR=0<<AS0;
-TCCR0=(0<<WGM00) | (0<<COM01) | (0<<COM00) | (0<<WGM01) | (1<<CS02) | (1<<CS01) | (0<<CS00);
+TCCR0=(0<<WGM00) | (0<<COM01) | (0<<COM00) | (0<<WGM01) | (0<<CS02) | (0<<CS01) | (0<<CS00);
 TCNT0=0x00;
 OCR0=0x00;
 
@@ -182,7 +289,7 @@ OCR3CH=0x00;
 OCR3CL=0x00;
 
 // Timer(s)/Counter(s) Interrupt(s) initialization
-TIMSK=(0<<OCIE2) | (0<<TOIE2) | (0<<TICIE1) | (0<<OCIE1A) | (0<<OCIE1B) | (0<<TOIE1) | (0<<OCIE0) | (1<<TOIE0);
+TIMSK=(0<<OCIE2) | (0<<TOIE2) | (0<<TICIE1) | (0<<OCIE1A) | (0<<OCIE1B) | (0<<TOIE1) | (0<<OCIE0) | (0<<TOIE0);
 ETIMSK=(0<<TICIE3) | (0<<OCIE3A) | (0<<OCIE3B) | (0<<TOIE3) | (0<<OCIE3C) | (0<<OCIE1C);
 
 // External Interrupt(s) initialization
@@ -205,7 +312,7 @@ EIMSK=(0<<INT7) | (0<<INT6) | (0<<INT5) | (0<<INT4) | (0<<INT3) | (0<<INT2) | (0
 // USART0 Mode: Asynchronous
 // USART0 Baud Rate: 9600
 UCSR0A=(0<<RXC0) | (0<<TXC0) | (0<<UDRE0) | (0<<FE0) | (0<<DOR0) | (0<<UPE0) | (0<<U2X0) | (0<<MPCM0);
-UCSR0B=(0<<RXCIE0) | (0<<TXCIE0) | (0<<UDRIE0) | (1<<RXEN0) | (1<<TXEN0) | (0<<UCSZ02) | (0<<RXB80) | (0<<TXB80);
+UCSR0B=(1<<RXCIE0) | (1<<TXCIE0) | (0<<UDRIE0) | (1<<RXEN0) | (1<<TXEN0) | (0<<UCSZ02) | (0<<RXB80) | (0<<TXB80);
 UCSR0C=(0<<UMSEL0) | (0<<UPM01) | (0<<UPM00) | (0<<USBS0) | (1<<UCSZ01) | (1<<UCSZ00) | (0<<UCPOL0);
 UBRR0H=0x00;
 UBRR0L=0x33;
@@ -239,26 +346,10 @@ TWCR=(0<<TWEA) | (0<<TWSTA) | (0<<TWSTO) | (0<<TWEN) | (0<<TWIE);
 
 // Global enable interrupts
 #asm("sei")
-   send_string("ready");
 
-   QUAT = RUN_5V;
-   CONTROL_5V_12V = RUN_5V;
-   SENSOR_1 = STATUS_ON;
-   LED_GREEN = STATUS_ON;
-   LED_RED = STATUS_ON;
-   delay_ms(500);
-   SENSOR_1 = STATUS_OFF;
-   LED_GREEN = STATUS_OFF;
-   LED_RED = STATUS_OFF;
-   perform_status_led();
 while (1)
       {
-          // Nhan lenh
-          recieve_string(recv_buf);
-          // Gui lai lenh qua uart
-          send_string(recv_buf);
-          // Xu ly lenh
-          execute_command(recv_buf);
-          memset(recv_buf, 0, sizeof(recv_buf));
+      // Place your code here
+
       }
 }

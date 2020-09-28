@@ -81,11 +81,11 @@ INT7Mode=0
 PCMSK=0
 [Timer0]
 T0ClkSource=0
-T0Prescaler=6
+T0Prescaler=0
 T0Mode=0
 T0Output=0
 T0OutputB=0
-T0OverflowInt=1
+T0OverflowInt=0
 T0CaptureInt=0
 T0CompareInt=0
 T0CompareBInt=0
@@ -265,10 +265,10 @@ CounterOverflowInt=0
 StartConditionInt=0
 [UART]
 RXEnabled0=1
-RXInterrupt0=0
+RXInterrupt0=1
 RXBuffer0=8
 TXEnabled0=1
-TXInterrupt0=0
+TXInterrupt0=1
 TXBuffer0=8
 BaudRate0=9600
 DoubleBaud0=0
