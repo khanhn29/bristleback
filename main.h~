@@ -59,7 +59,7 @@ enum alert_mode_e
 
 enum gas_alarm_mode_e
 {
-   error_none,
+   no_fault,
    error_orange,
    error_red
 };

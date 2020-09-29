@@ -1096,6 +1096,7 @@ __DELAY_USW_LOOP:
 	.DEF _g_count_adc_1_msb=R11
 	.DEF _g_value_adc_1=R12
 	.DEF _g_value_adc_1_msb=R13
+	.DEF _g_gas_alarm_mode=R4
 
 	.CSEG
 	.ORG 0x00
@@ -1154,12 +1155,17 @@ _0x0:
 	.DB  0x72,0x65,0x61,0x64,0x79,0x0
 _0x20003:
 	.DB  0x64
+_0x20004:
+	.DB  0x1
+_0x20005:
+	.DB  0x1
 _0x20000:
 	.DB  0x65,0x72,0x72,0x2C,0x25,0x64,0x3B,0x0
 	.DB  0x61,0x64,0x63,0x2C,0x25,0x64,0x3B,0x0
 	.DB  0x2C,0x0,0x43,0x4F,0x4E,0x4E,0x45,0x43
 	.DB  0x54,0x0,0x4F,0x46,0x46,0x0,0x74,0x68
 	.DB  0x72,0x65,0x73,0x68,0x6F,0x6C,0x64,0x0
+	.DB  0x67,0x61,0x73,0x0
 _0x2040060:
 	.DB  0x1
 _0x2040000:
@@ -1179,17 +1185,29 @@ __GLOBAL_INI_TBL:
 	.DW  _g_temperature_not_ready_value_G001
 	.DW  _0x20003*2
 
+	.DW  0x01
+	.DW  _g_led_control
+	.DW  _0x20004*2
+
+	.DW  0x01
+	.DW  _g_alarm_control
+	.DW  _0x20005*2
+
 	.DW  0x08
-	.DW  _0x20072
+	.DW  _0x20081
 	.DW  _0x20000*2+18
 
 	.DW  0x04
-	.DW  _0x20072+8
+	.DW  _0x20081+8
 	.DW  _0x20000*2+26
 
 	.DW  0x0A
-	.DW  _0x20072+12
+	.DW  _0x20081+12
 	.DW  _0x20000*2+30
+
+	.DW  0x04
+	.DW  _0x20081+22
+	.DW  _0x20000*2+40
 
 	.DW  0x01
 	.DW  __seed_G102
@@ -1744,32 +1762,34 @@ _0x6:
 
 	.DSEG
 ;
-;unsigned int      g_led_control;
+;unsigned int      g_led_control = 1;
+;unsigned int      g_alarm_control = 1;
 ;int      g_connect_mode;
 ;char     g_uart_send_buf[MAX_RECIEVE_BUF];
 ;extern enum alert_mode_e    g_alert_led_mode;
+;enum gas_alarm_mode_e g_gas_alarm_mode;
 ;
 ;void get_status_led()
-; 0001 0016 {
+; 0001 0018 {
 
 	.CSEG
 _get_status_led:
 ; .FSTART _get_status_led
-; 0001 0017    g_count_adc_1++;
+; 0001 0019    g_count_adc_1++;
 	MOVW R30,R10
 	ADIW R30,1
 	MOVW R10,R30
-; 0001 0018    if(g_count_adc_1 > 100)
+; 0001 001A    if(g_count_adc_1 > 100)
 	LDI  R30,LOW(100)
 	LDI  R31,HIGH(100)
 	CP   R30,R10
 	CPC  R31,R11
-	BRSH _0x20004
-; 0001 0019    {
-; 0001 001A       g_count_adc_1 = 0;
+	BRSH _0x20006
+; 0001 001B    {
+; 0001 001C       g_count_adc_1 = 0;
 	CLR  R10
 	CLR  R11
-; 0001 001B       g_value_adc_1 = read_adc(1) * 500 / 1023;
+; 0001 001D       g_value_adc_1 = read_adc(1) * 500 / 1023;
 	LDI  R26,LOW(1)
 	RCALL _read_adc
 	LDI  R26,LOW(500)
@@ -1780,70 +1800,70 @@ _get_status_led:
 	LDI  R31,HIGH(1023)
 	CALL __DIVW21U
 	MOVW R12,R30
-; 0001 001C    }
-; 0001 001D 
-; 0001 001E    if(DOOR == IS_OPEN || INLET == IS_REMOVED)
-_0x20004:
-	SBIC 0x19,1
-	RJMP _0x20006
-	SBIS 0x19,3
-	RJMP _0x20005
+; 0001 001E    }
+; 0001 001F 
+; 0001 0020    if(DOOR == IS_OPEN || INLET == IS_REMOVED)
 _0x20006:
-; 0001 001F    {
-; 0001 0020       g_alert_led_mode = door_open_or_inlet_removed;
+	SBIC 0x19,1
+	RJMP _0x20008
+	SBIS 0x19,3
+	RJMP _0x20007
+_0x20008:
+; 0001 0021    {
+; 0001 0022       g_alert_led_mode = door_open_or_inlet_removed;
 	LDI  R30,LOW(4)
 	MOV  R5,R30
-; 0001 0021       turnoff();
+; 0001 0023       turnoff();
 	RCALL _turnoff
-; 0001 0022    }
-; 0001 0023    else if(NOZZLE == IS_BLOCKED)
-	RJMP _0x20008
-_0x20005:
+; 0001 0024    }
+; 0001 0025    else if(NOZZLE == IS_BLOCKED)
+	RJMP _0x2000A
+_0x20007:
 	SBIC 0x19,5
-	RJMP _0x20009
-; 0001 0024    {
-; 0001 0025       g_alert_led_mode = nozzle_blocked;
+	RJMP _0x2000B
+; 0001 0026    {
+; 0001 0027       g_alert_led_mode = nozzle_blocked;
 	LDI  R30,LOW(1)
 	MOV  R5,R30
-; 0001 0026       turnoff();
+; 0001 0028       turnoff();
 	RCALL _turnoff
-; 0001 0027    }
-; 0001 0028    else if(g_value_adc_1 >= g_temperature_not_ready_value)
-	RJMP _0x2000A
-_0x20009:
+; 0001 0029    }
+; 0001 002A    else if(g_value_adc_1 >= g_temperature_not_ready_value)
+	RJMP _0x2000C
+_0x2000B:
 	LDS  R30,_g_temperature_not_ready_value_G001
 	LDS  R31,_g_temperature_not_ready_value_G001+1
 	CP   R12,R30
 	CPC  R13,R31
-	BRLT _0x2000B
-; 0001 0029    {
-; 0001 002A       g_alert_led_mode = in_temperature_not_ready_mode;
+	BRLT _0x2000D
+; 0001 002B    {
+; 0001 002C       g_alert_led_mode = in_temperature_not_ready_mode;
 	LDI  R30,LOW(3)
 	MOV  R5,R30
-; 0001 002B       turnoff();
+; 0001 002D       turnoff();
 	RCALL _turnoff
-; 0001 002C    }
-; 0001 002D    else
-	RJMP _0x2000C
-_0x2000B:
-; 0001 002E    {
-; 0001 002F       g_alert_led_mode = no_fault;
+; 0001 002E    }
+; 0001 002F    else
+	RJMP _0x2000E
+_0x2000D:
+; 0001 0030    {
+; 0001 0031       g_alert_led_mode = no_fault;
 	CLR  R5
-; 0001 0030    }
+; 0001 0032    }
+_0x2000E:
 _0x2000C:
 _0x2000A:
-_0x20008:
-; 0001 0031 }
+; 0001 0033 }
 	RET
 ; .FEND
 ;
 ;
 ;void send_string(unsigned char *u)
-; 0001 0035 {
+; 0001 0037 {
 _send_string:
 ; .FSTART _send_string
-; 0001 0036    unsigned char n,i;
-; 0001 0037    n = strlen(u);
+; 0001 0038    unsigned char n,i;
+; 0001 0039    n = strlen(u);
 	CALL SUBOPT_0x1
 ;	*u -> Y+2
 ;	n -> R17
@@ -1852,13 +1872,13 @@ _send_string:
 	LDD  R27,Y+2+1
 	CALL _strlen
 	MOV  R17,R30
-; 0001 0038    for(i = 0; i < n; i++)
+; 0001 003A    for(i = 0; i < n; i++)
 	LDI  R16,LOW(0)
-_0x2000E:
+_0x20010:
 	CP   R16,R17
-	BRSH _0x2000F
-; 0001 0039    {
-; 0001 003A       putchar(u[i]);
+	BRSH _0x20011
+; 0001 003B    {
+; 0001 003C       putchar(u[i]);
 	LDD  R26,Y+2
 	LDD  R27,Y+2+1
 	CLR  R30
@@ -1866,17 +1886,17 @@ _0x2000E:
 	ADC  R27,R30
 	LD   R26,X
 	CALL _putchar
-; 0001 003B    }
+; 0001 003D    }
 	SUBI R16,-1
-	RJMP _0x2000E
-_0x2000F:
-; 0001 003C    putchar('\r');
+	RJMP _0x20010
+_0x20011:
+; 0001 003E    putchar('\r');
 	LDI  R26,LOW(13)
 	CALL _putchar
-; 0001 003D    putchar('\n');
+; 0001 003F    putchar('\n');
 	LDI  R26,LOW(10)
 	CALL _putchar
-; 0001 003E }
+; 0001 0040 }
 	LDD  R17,Y+1
 	LDD  R16,Y+0
 	JMP  _0x20A0007
@@ -1885,304 +1905,380 @@ _0x2000F:
 ;
 ;
 ;void perform_status_led()
-; 0001 0043 {
+; 0001 0045 {
 _perform_status_led:
 ; .FSTART _perform_status_led
-; 0001 0044    static enum alert_mode_e prev_status = no_fault;
-; 0001 0045    g_led_control++;
+; 0001 0046    static enum alert_mode_e prev_status = no_fault;
+; 0001 0047    g_led_control++;
 	LDI  R26,LOW(_g_led_control)
 	LDI  R27,HIGH(_g_led_control)
 	CALL SUBOPT_0x2
-; 0001 0046    if(g_led_control >= 10000)
+; 0001 0048    if(g_led_control >= 10000)
 	CALL SUBOPT_0x3
 	CPI  R26,LOW(0x2710)
 	LDI  R30,HIGH(0x2710)
 	CPC  R27,R30
-	BRLO _0x20010
-; 0001 0047       g_led_control = 0;
+	BRLO _0x20012
+; 0001 0049       g_led_control = 0;
 	LDI  R30,LOW(0)
 	STS  _g_led_control,R30
 	STS  _g_led_control+1,R30
-; 0001 0048 
-; 0001 0049    switch(g_alert_led_mode)
-_0x20010:
+; 0001 004A 
+; 0001 004B    switch(g_alert_led_mode)
+_0x20012:
 	MOV  R30,R5
 	LDI  R31,0
-; 0001 004A    {
-; 0001 004B       case no_fault:
+; 0001 004C    {
+; 0001 004D       case no_fault:
 	SBIW R30,0
-	BRNE _0x20014
-; 0001 004C       {
-; 0001 004D          LED_GREEN = STATUS_ON;
+	BRNE _0x20016
+; 0001 004E       {
+; 0001 004F          LED_GREEN = STATUS_ON;
 	SBI  0x15,5
-; 0001 004E          LED_RED = STATUS_OFF;
+; 0001 0050          LED_RED = STATUS_OFF;
 	CBI  0x15,7
-; 0001 004F          break;
-	RJMP _0x20013
-; 0001 0050       }
-; 0001 0051       case nozzle_blocked:
-_0x20014:
+; 0001 0051          break;
+	RJMP _0x20015
+; 0001 0052       }
+; 0001 0053       case nozzle_blocked:
+_0x20016:
 	CPI  R30,LOW(0x1)
 	LDI  R26,HIGH(0x1)
 	CPC  R31,R26
-	BRNE _0x20019
-; 0001 0052       {
-; 0001 0053          if(g_led_control % DELAY_DIV_NUM == 0)
+	BRNE _0x2001B
+; 0001 0054       {
+; 0001 0055          if(g_led_control % DELAY_DIV_NUM == 0)
 	CALL SUBOPT_0x4
-	BRNE _0x2001A
-; 0001 0054          {
-; 0001 0055             LED_GREEN = !LED_GREEN;
+	BRNE _0x2001C
+; 0001 0056          {
+; 0001 0057             LED_GREEN = !LED_GREEN;
 	SBIS 0x15,5
-	RJMP _0x2001B
-	CBI  0x15,5
-	RJMP _0x2001C
-_0x2001B:
-	SBI  0x15,5
-_0x2001C:
-; 0001 0056             LED_RED = LED_GREEN;
-	SBIC 0x15,5
 	RJMP _0x2001D
-	CBI  0x15,7
+	CBI  0x15,5
 	RJMP _0x2001E
 _0x2001D:
-	SBI  0x15,7
+	SBI  0x15,5
 _0x2001E:
-; 0001 0057          }
-; 0001 0058          break;
-_0x2001A:
-	RJMP _0x20013
-; 0001 0059       }
-; 0001 005A       case in_maintenance_mode:
-_0x20019:
+; 0001 0058             LED_RED = LED_GREEN;
+	SBIC 0x15,5
+	RJMP _0x2001F
+	CBI  0x15,7
+	RJMP _0x20020
+_0x2001F:
+	SBI  0x15,7
+_0x20020:
+; 0001 0059          }
+; 0001 005A          break;
+_0x2001C:
+	RJMP _0x20015
+; 0001 005B       }
+; 0001 005C       case in_maintenance_mode:
+_0x2001B:
 	CPI  R30,LOW(0x2)
 	LDI  R26,HIGH(0x2)
 	CPC  R31,R26
-	BRNE _0x2001F
-; 0001 005B       {
-; 0001 005C          if(g_led_control % DELAY_DIV_NUM == 0)
+	BRNE _0x20021
+; 0001 005D       {
+; 0001 005E          if(g_led_control % DELAY_DIV_NUM == 0)
 	CALL SUBOPT_0x4
-	BRNE _0x20020
-; 0001 005D          {
-; 0001 005E             LED_GREEN = !LED_GREEN;
-	SBIS 0x15,5
-	RJMP _0x20021
-	CBI  0x15,5
-	RJMP _0x20022
-_0x20021:
-	SBI  0x15,5
-_0x20022:
-; 0001 005F             LED_RED = !LED_GREEN;
+	BRNE _0x20022
+; 0001 005F          {
+; 0001 0060             LED_GREEN = !LED_GREEN;
 	SBIS 0x15,5
 	RJMP _0x20023
-	CBI  0x15,7
+	CBI  0x15,5
 	RJMP _0x20024
 _0x20023:
-	SBI  0x15,7
+	SBI  0x15,5
 _0x20024:
-; 0001 0060          }
-; 0001 0061          break;
-_0x20020:
-	RJMP _0x20013
-; 0001 0062       }
-; 0001 0063       case in_temperature_not_ready_mode:
-_0x2001F:
+; 0001 0061             LED_RED = !LED_GREEN;
+	SBIS 0x15,5
+	RJMP _0x20025
+	CBI  0x15,7
+	RJMP _0x20026
+_0x20025:
+	SBI  0x15,7
+_0x20026:
+; 0001 0062          }
+; 0001 0063          break;
+_0x20022:
+	RJMP _0x20015
+; 0001 0064       }
+; 0001 0065       case in_temperature_not_ready_mode:
+_0x20021:
 	CPI  R30,LOW(0x3)
 	LDI  R26,HIGH(0x3)
 	CPC  R31,R26
-	BRNE _0x20025
-; 0001 0064       {
-; 0001 0065          if(g_led_control % DELAY_DIV_NUM == 0)
+	BRNE _0x20027
+; 0001 0066       {
+; 0001 0067          if(g_led_control % DELAY_DIV_NUM == 0)
 	CALL SUBOPT_0x4
-	BRNE _0x20026
-; 0001 0066          {
-; 0001 0067             LED_GREEN = !LED_GREEN;
+	BRNE _0x20028
+; 0001 0068          {
+; 0001 0069             LED_GREEN = !LED_GREEN;
 	SBIS 0x15,5
-	RJMP _0x20027
+	RJMP _0x20029
 	CBI  0x15,5
-	RJMP _0x20028
-_0x20027:
+	RJMP _0x2002A
+_0x20029:
 	SBI  0x15,5
+_0x2002A:
+; 0001 006A          }
+; 0001 006B          LED_RED = STATUS_OFF;
 _0x20028:
-; 0001 0068          }
-; 0001 0069          LED_RED = STATUS_OFF;
-_0x20026:
 	CBI  0x15,7
-; 0001 006A          break;
-	RJMP _0x20013
-; 0001 006B       }
-; 0001 006C       case door_open_or_inlet_removed:
-_0x20025:
+; 0001 006C          break;
+	RJMP _0x20015
+; 0001 006D       }
+; 0001 006E       case door_open_or_inlet_removed:
+_0x20027:
 	CPI  R30,LOW(0x4)
 	LDI  R26,HIGH(0x4)
 	CPC  R31,R26
-	BRNE _0x2002B
-; 0001 006D       {
-; 0001 006E          if(g_led_control % DELAY_DIV_NUM == 0)
+	BRNE _0x2002D
+; 0001 006F       {
+; 0001 0070          if(g_led_control % DELAY_DIV_NUM == 0)
 	CALL SUBOPT_0x4
-	BRNE _0x2002C
-; 0001 006F          {
-; 0001 0070             LED_RED = !LED_RED;
+	BRNE _0x2002E
+; 0001 0071          {
+; 0001 0072             LED_RED = !LED_RED;
 	SBIS 0x15,7
-	RJMP _0x2002D
+	RJMP _0x2002F
 	CBI  0x15,7
-	RJMP _0x2002E
-_0x2002D:
+	RJMP _0x20030
+_0x2002F:
 	SBI  0x15,7
+_0x20030:
+; 0001 0073          }
+; 0001 0074          LED_GREEN = STATUS_OFF;
 _0x2002E:
-; 0001 0071          }
-; 0001 0072          LED_GREEN = STATUS_OFF;
-_0x2002C:
 	CBI  0x15,5
-; 0001 0073          break;
-	RJMP _0x20013
-; 0001 0074       }
-; 0001 0075       case serial_link_to_siu_fault:
-_0x2002B:
+; 0001 0075          break;
+	RJMP _0x20015
+; 0001 0076       }
+; 0001 0077       case serial_link_to_siu_fault:
+_0x2002D:
 	CPI  R30,LOW(0x5)
 	LDI  R26,HIGH(0x5)
 	CPC  R31,R26
-	BRNE _0x20031
-; 0001 0076       {
-; 0001 0077          if(g_led_control % DELAY_DIV_NUM == 0)
+	BRNE _0x20033
+; 0001 0078       {
+; 0001 0079          if(g_led_control % DELAY_DIV_NUM == 0)
 	CALL SUBOPT_0x4
-	BRNE _0x20032
-; 0001 0078          {
-; 0001 0079             LED_RED = !LED_RED;
+	BRNE _0x20034
+; 0001 007A          {
+; 0001 007B             LED_RED = !LED_RED;
 	SBIS 0x15,7
-	RJMP _0x20033
+	RJMP _0x20035
 	CBI  0x15,7
-	RJMP _0x20034
-_0x20033:
+	RJMP _0x20036
+_0x20035:
 	SBI  0x15,7
+_0x20036:
+; 0001 007C          }
+; 0001 007D          LED_GREEN = STATUS_ON;
 _0x20034:
-; 0001 007A          }
-; 0001 007B          LED_GREEN = STATUS_ON;
-_0x20032:
 	SBI  0x15,5
-; 0001 007C          break;
-	RJMP _0x20013
-; 0001 007D       }
-; 0001 007E       case other_fault:
-_0x20031:
+; 0001 007E          break;
+	RJMP _0x20015
+; 0001 007F       }
+; 0001 0080       case other_fault:
+_0x20033:
 	CPI  R30,LOW(0x6)
 	LDI  R26,HIGH(0x6)
 	CPC  R31,R26
-	BRNE _0x20037
-; 0001 007F       {
-; 0001 0080          LED_RED = STATUS_ON;
+	BRNE _0x20039
+; 0001 0081       {
+; 0001 0082          LED_RED = STATUS_ON;
 	SBI  0x15,7
-; 0001 0081          LED_GREEN = STATUS_OFF;
+; 0001 0083          LED_GREEN = STATUS_OFF;
 	CBI  0x15,5
-; 0001 0082          break;
-	RJMP _0x20013
-; 0001 0083       }
-; 0001 0084       case led_check:
-_0x20037:
+; 0001 0084          break;
+	RJMP _0x20015
+; 0001 0085       }
+; 0001 0086       case led_check:
+_0x20039:
 	CPI  R30,LOW(0x7)
 	LDI  R26,HIGH(0x7)
 	CPC  R31,R26
-	BRNE _0x20041
-; 0001 0085       {
-; 0001 0086          LED_RED = STATUS_ON;
+	BRNE _0x20043
+; 0001 0087       {
+; 0001 0088          LED_RED = STATUS_ON;
 	SBI  0x15,7
-; 0001 0087          LED_GREEN = STATUS_ON;
+; 0001 0089          LED_GREEN = STATUS_ON;
 	SBI  0x15,5
-; 0001 0088          break;
-; 0001 0089       }
-; 0001 008A       default:
-_0x20041:
-; 0001 008B          break;
-; 0001 008C    }
-_0x20013:
-; 0001 008D    if(g_alert_led_mode != no_fault && g_led_control % DELAY_SEND_ERR_DIV_NUM == 0)
+; 0001 008A          break;
+; 0001 008B       }
+; 0001 008C       default:
+_0x20043:
+; 0001 008D          break;
+; 0001 008E    }
+_0x20015:
+; 0001 008F    if(g_alert_led_mode != no_fault && g_led_control % DELAY_SEND_ERR_DIV_NUM == 0)
 	TST  R5
-	BREQ _0x20043
+	BREQ _0x20045
 	CALL SUBOPT_0x3
 	LDI  R30,LOW(100)
 	LDI  R31,HIGH(100)
 	CALL __MODW21U
 	SBIW R30,0
-	BREQ _0x20044
-_0x20043:
-	RJMP _0x20042
-_0x20044:
-; 0001 008E    {
-; 0001 008F       memset(g_uart_send_buf,0,sizeof(g_uart_send_buf));
+	BREQ _0x20046
+_0x20045:
+	RJMP _0x20044
+_0x20046:
+; 0001 0090    {
+; 0001 0091       memset(g_uart_send_buf,0,sizeof(g_uart_send_buf));
 	CALL SUBOPT_0x5
-; 0001 0090       sprintf(g_uart_send_buf, "err,%d;", g_alert_led_mode);
+; 0001 0092       sprintf(g_uart_send_buf, "err,%d;", g_alert_led_mode);
 	CALL SUBOPT_0x6
-; 0001 0091       send_string(g_uart_send_buf);
-; 0001 0092       CONTROL_5V_12V = RUN_5V;
+; 0001 0093       send_string(g_uart_send_buf);
+; 0001 0094       CONTROL_5V_12V = RUN_5V;
 	CBI  0x15,1
-; 0001 0093       prev_status = g_alert_led_mode;
-	RJMP _0x20078
-; 0001 0094    }
-; 0001 0095    else if(g_alert_led_mode == no_fault && prev_status != no_fault)
-_0x20042:
+; 0001 0095       prev_status = g_alert_led_mode;
+	RJMP _0x2008A
+; 0001 0096    }
+; 0001 0097    else if(g_alert_led_mode == no_fault && prev_status != no_fault)
+_0x20044:
 	TST  R5
-	BRNE _0x20049
+	BRNE _0x2004B
 	LDS  R26,_prev_status_S0010002000
 	CPI  R26,LOW(0x0)
-	BRNE _0x2004A
-_0x20049:
-	RJMP _0x20048
-_0x2004A:
-; 0001 0096    {
-; 0001 0097       memset(g_uart_send_buf,0,sizeof(g_uart_send_buf));
-	CALL SUBOPT_0x5
-; 0001 0098       sprintf(g_uart_send_buf, "err,%d;", g_alert_led_mode);
-	CALL SUBOPT_0x6
-; 0001 0099       send_string(g_uart_send_buf);
-; 0001 009A       prev_status = g_alert_led_mode;
-_0x20078:
-	STS  _prev_status_S0010002000,R5
-; 0001 009B    }
-; 0001 009C    ALARM = LED_RED;
-_0x20048:
-	SBIC 0x15,7
-	RJMP _0x2004B
-	CBI  0x1B,7
-	RJMP _0x2004C
+	BRNE _0x2004C
 _0x2004B:
-	SBI  0x1B,7
+	RJMP _0x2004A
 _0x2004C:
-; 0001 009D }
+; 0001 0098    {
+; 0001 0099       memset(g_uart_send_buf,0,sizeof(g_uart_send_buf));
+	CALL SUBOPT_0x5
+; 0001 009A       sprintf(g_uart_send_buf, "err,%d;", g_alert_led_mode);
+	CALL SUBOPT_0x6
+; 0001 009B       send_string(g_uart_send_buf);
+; 0001 009C       prev_status = g_alert_led_mode;
+_0x2008A:
+	STS  _prev_status_S0010002000,R5
+; 0001 009D    }
+; 0001 009E 
+; 0001 009F    g_alarm_control++;
+_0x2004A:
+	LDI  R26,LOW(_g_alarm_control)
+	LDI  R27,HIGH(_g_alarm_control)
+	CALL SUBOPT_0x2
+; 0001 00A0    if(g_alarm_control >= 10000)
+	CALL SUBOPT_0x7
+	CPI  R26,LOW(0x2710)
+	LDI  R30,HIGH(0x2710)
+	CPC  R27,R30
+	BRLO _0x2004D
+; 0001 00A1       g_alarm_control = 0;
+	LDI  R30,LOW(0)
+	STS  _g_alarm_control,R30
+	STS  _g_alarm_control+1,R30
+; 0001 00A2 
+; 0001 00A3    switch (g_gas_alarm_mode)
+_0x2004D:
+	MOV  R30,R4
+	LDI  R31,0
+; 0001 00A4    {
+; 0001 00A5       case error_orange:
+	CPI  R30,LOW(0x1)
+	LDI  R26,HIGH(0x1)
+	CPC  R31,R26
+	BRNE _0x20051
+; 0001 00A6       {
+; 0001 00A7          if(g_alarm_control % (DELAY_DIV_NUM_ALARM * 2) == 0)
+	CALL SUBOPT_0x7
+	LDI  R30,LOW(40)
+	LDI  R31,HIGH(40)
+	CALL __MODW21U
+	SBIW R30,0
+	BRNE _0x20052
+; 0001 00A8          {
+; 0001 00A9             ALARM = !ALARM;
+	SBIS 0x1B,7
+	RJMP _0x20053
+	CBI  0x1B,7
+	RJMP _0x20054
+_0x20053:
+	SBI  0x1B,7
+_0x20054:
+; 0001 00AA          }
+; 0001 00AB          break;
+_0x20052:
+	RJMP _0x20050
+; 0001 00AC       }
+; 0001 00AD       case error_red:
+_0x20051:
+	CPI  R30,LOW(0x2)
+	LDI  R26,HIGH(0x2)
+	CPC  R31,R26
+	BRNE _0x20059
+; 0001 00AE       {
+; 0001 00AF          if(g_alarm_control % (DELAY_DIV_NUM_ALARM * 1) == 0)
+	CALL SUBOPT_0x7
+	LDI  R30,LOW(20)
+	LDI  R31,HIGH(20)
+	CALL __MODW21U
+	SBIW R30,0
+	BRNE _0x20056
+; 0001 00B0          {
+; 0001 00B1             ALARM = !ALARM;
+	SBIS 0x1B,7
+	RJMP _0x20057
+	CBI  0x1B,7
+	RJMP _0x20058
+_0x20057:
+	SBI  0x1B,7
+_0x20058:
+; 0001 00B2          }
+; 0001 00B3          break;
+_0x20056:
+	RJMP _0x20050
+; 0001 00B4       }
+; 0001 00B5       default:
+_0x20059:
+; 0001 00B6       {
+; 0001 00B7          ALARM = STATUS_OFF;
+	CBI  0x1B,7
+; 0001 00B8       }
+; 0001 00B9    }
+_0x20050:
+; 0001 00BA }
 	RET
 ; .FEND
 ;
 ;void run_connect_mode()
-; 0001 00A0 {
+; 0001 00BD {
 _run_connect_mode:
 ; .FSTART _run_connect_mode
-; 0001 00A1    g_count_adc_0++;
+; 0001 00BE    g_count_adc_0++;
 	MOVW R30,R6
 	ADIW R30,1
 	MOVW R6,R30
-; 0001 00A2    if(g_count_adc_0 >= TIMEOUT_ON_MODE && g_connect_mode == ON_MODE)
+; 0001 00BF    if(g_count_adc_0 >= TIMEOUT_ON_MODE && g_connect_mode == ON_MODE)
 	LDI  R30,LOW(80)
 	LDI  R31,HIGH(80)
 	CP   R6,R30
 	CPC  R7,R31
-	BRLO _0x2004E
+	BRLO _0x2005D
 	LDS  R26,_g_connect_mode
 	LDS  R27,_g_connect_mode+1
 	SBIW R26,1
-	BREQ _0x2004F
-_0x2004E:
-	RJMP _0x2004D
-_0x2004F:
-; 0001 00A3    {
-; 0001 00A4       // Read adc and sent via uart
-; 0001 00A5       g_count_adc_0 = 0;
+	BREQ _0x2005E
+_0x2005D:
+	RJMP _0x2005C
+_0x2005E:
+; 0001 00C0    {
+; 0001 00C1       // Read adc and sent via uart
+; 0001 00C2       g_count_adc_0 = 0;
 	CLR  R6
 	CLR  R7
-; 0001 00A6       g_value_adc_0 = read_adc(0);
+; 0001 00C3       g_value_adc_0 = read_adc(0);
 	LDI  R26,LOW(0)
 	RCALL _read_adc
 	MOVW R8,R30
-; 0001 00A7       memset(g_uart_send_buf,0,sizeof(g_uart_send_buf));
+; 0001 00C4       memset(g_uart_send_buf,0,sizeof(g_uart_send_buf));
 	CALL SUBOPT_0x5
-; 0001 00A8       sprintf(g_uart_send_buf, "adc,%d;", g_value_adc_0);
+; 0001 00C5       sprintf(g_uart_send_buf, "adc,%d;", g_value_adc_0);
 	LDI  R30,LOW(_g_uart_send_buf)
 	LDI  R31,HIGH(_g_uart_send_buf)
 	ST   -Y,R31
@@ -2196,66 +2292,66 @@ _0x2004F:
 	LDI  R24,4
 	CALL _sprintf
 	ADIW R28,8
-; 0001 00A9       send_string(g_uart_send_buf);
+; 0001 00C6       send_string(g_uart_send_buf);
 	LDI  R26,LOW(_g_uart_send_buf)
 	LDI  R27,HIGH(_g_uart_send_buf)
 	RCALL _send_string
-; 0001 00AA    }else if(g_count_adc_0 >= TIMEOUT_STARTING_MODE && g_connect_mode == STARTING_MODE){
-	RJMP _0x20050
-_0x2004D:
+; 0001 00C7    }else if(g_count_adc_0 >= TIMEOUT_STARTING_MODE && g_connect_mode == STARTING_MODE){
+	RJMP _0x2005F
+_0x2005C:
 	LDI  R30,LOW(500)
 	LDI  R31,HIGH(500)
 	CP   R6,R30
 	CPC  R7,R31
-	BRLO _0x20052
+	BRLO _0x20061
 	LDS  R26,_g_connect_mode
 	LDS  R27,_g_connect_mode+1
 	SBIW R26,2
-	BREQ _0x20053
-_0x20052:
-	RJMP _0x20051
-_0x20053:
-; 0001 00AB       // Sau khi nhan duoc lenh CONNECT, chay TIMEOUT_STARTING_MODE lan timer, sau do thay doi ve trang thai on mode
-; 0001 00AC       QUAT = ON_5V;
+	BREQ _0x20062
+_0x20061:
+	RJMP _0x20060
+_0x20062:
+; 0001 00C8       // Sau khi nhan duoc lenh CONNECT, chay TIMEOUT_STARTING_MODE lan timer, sau do thay doi ve trang thai on mode
+; 0001 00C9       QUAT = ON_5V;
 	SBI  0x15,0
-; 0001 00AD       CONTROL_5V_12V = RUN_5V;
+; 0001 00CA       CONTROL_5V_12V = RUN_5V;
 	CBI  0x15,1
-; 0001 00AE       SENSOR_1 = STATUS_ON;
+; 0001 00CB       SENSOR_1 = STATUS_ON;
 	SBI  0x15,3
-; 0001 00AF       g_count_adc_0 = 0;
+; 0001 00CC       g_count_adc_0 = 0;
 	CLR  R6
 	CLR  R7
-; 0001 00B0       g_connect_mode = ON_MODE;
+; 0001 00CD       g_connect_mode = ON_MODE;
 	LDI  R30,LOW(1)
 	LDI  R31,HIGH(1)
 	STS  _g_connect_mode,R30
 	STS  _g_connect_mode+1,R31
-; 0001 00B1    }else if(g_count_adc_0 >= TIMEOUT_STARTING_MODE){
-	RJMP _0x2005A
-_0x20051:
+; 0001 00CE    }else if(g_count_adc_0 >= TIMEOUT_STARTING_MODE){
+	RJMP _0x20069
+_0x20060:
 	LDI  R30,LOW(500)
 	LDI  R31,HIGH(500)
 	CP   R6,R30
 	CPC  R7,R31
-	BRLO _0x2005B
-; 0001 00B2       g_count_adc_0 = 0;
+	BRLO _0x2006A
+; 0001 00CF       g_count_adc_0 = 0;
 	CLR  R6
 	CLR  R7
-; 0001 00B3    }
-; 0001 00B4 }
-_0x2005B:
-_0x2005A:
-_0x20050:
+; 0001 00D0    }
+; 0001 00D1 }
+_0x2006A:
+_0x20069:
+_0x2005F:
 	RET
 ; .FEND
 ;
 ;void recieve_string(char* buf)
-; 0001 00B7 {
+; 0001 00D4 {
 _recieve_string:
 ; .FSTART _recieve_string
-; 0001 00B8    int i = 0;
-; 0001 00B9    char u = getchar();
-; 0001 00BA    while(1){
+; 0001 00D5    int i = 0;
+; 0001 00D6    char u = getchar();
+; 0001 00D7    while(1){
 	ST   -Y,R27
 	ST   -Y,R26
 	CALL __SAVELOCR4
@@ -2265,40 +2361,40 @@ _recieve_string:
 	__GETWRN 16,17,0
 	CALL _getchar
 	MOV  R19,R30
-_0x2005C:
-; 0001 00BB       if(u != ';' && i < MAX_RECIEVE_BUF){
+_0x2006B:
+; 0001 00D8       if(u != ';' && i < MAX_RECIEVE_BUF){
 	CPI  R19,59
-	BREQ _0x20060
+	BREQ _0x2006F
 	__CPWRN 16,17,50
-	BRLT _0x20061
-_0x20060:
-	RJMP _0x2005F
-_0x20061:
-; 0001 00BC          buf[i] = u;
+	BRLT _0x20070
+_0x2006F:
+	RJMP _0x2006E
+_0x20070:
+; 0001 00D9          buf[i] = u;
 	MOVW R30,R16
 	LDD  R26,Y+4
 	LDD  R27,Y+4+1
 	ADD  R30,R26
 	ADC  R31,R27
 	ST   Z,R19
-; 0001 00BD          i++;
+; 0001 00DA          i++;
 	__ADDWRN 16,17,1
-; 0001 00BE          u = getchar();
+; 0001 00DB          u = getchar();
 	CALL _getchar
 	MOV  R19,R30
-; 0001 00BF       }else{
-	RJMP _0x20062
-_0x2005F:
-; 0001 00C0          break;
-	RJMP _0x2005E
-; 0001 00C1       }
-_0x20062:
-; 0001 00C2    }
-	RJMP _0x2005C
-_0x2005E:
-; 0001 00C3    i++;
+; 0001 00DC       }else{
+	RJMP _0x20071
+_0x2006E:
+; 0001 00DD          break;
+	RJMP _0x2006D
+; 0001 00DE       }
+_0x20071:
+; 0001 00DF    }
+	RJMP _0x2006B
+_0x2006D:
+; 0001 00E0    i++;
 	__ADDWRN 16,17,1
-; 0001 00C4    buf[i] = '\0';
+; 0001 00E1    buf[i] = '\0';
 	MOVW R30,R16
 	LDD  R26,Y+4
 	LDD  R27,Y+4+1
@@ -2306,65 +2402,65 @@ _0x2005E:
 	ADC  R27,R31
 	LDI  R30,LOW(0)
 	ST   X,R30
-; 0001 00C5 }
+; 0001 00E2 }
 	CALL __LOADLOCR4
 	JMP  _0x20A0005
 ; .FEND
 ;
 ;void connect_avr()
-; 0001 00C8 {
+; 0001 00E5 {
 _connect_avr:
 ; .FSTART _connect_avr
-; 0001 00C9    // Bat ADC
-; 0001 00CA    // ADCSRA=(1<<ADEN) | (0<<ADSC) | (0<<ADFR) | (0<<ADIF) | (0<<ADIE) | (0<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
-; 0001 00CB    g_count_adc_0 = 0;
+; 0001 00E6    // Bat ADC
+; 0001 00E7    // ADCSRA=(1<<ADEN) | (0<<ADSC) | (0<<ADFR) | (0<<ADIF) | (0<<ADIE) | (0<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
+; 0001 00E8    g_count_adc_0 = 0;
 	CLR  R6
 	CLR  R7
-; 0001 00CC    QUAT = OFF_5V;
+; 0001 00E9    QUAT = OFF_5V;
 	CBI  0x15,0
-; 0001 00CD    CONTROL_5V_12V = RUN_12V;
+; 0001 00EA    CONTROL_5V_12V = RUN_12V;
 	SBI  0x15,1
-; 0001 00CE    g_connect_mode = STARTING_MODE;
+; 0001 00EB    g_connect_mode = STARTING_MODE;
 	LDI  R30,LOW(2)
 	LDI  R31,HIGH(2)
 	STS  _g_connect_mode,R30
 	STS  _g_connect_mode+1,R31
-; 0001 00CF }
+; 0001 00EC }
 	RET
 ; .FEND
 ;
 ;void turnoff()
-; 0001 00D2 {
+; 0001 00EF {
 _turnoff:
 ; .FSTART _turnoff
-; 0001 00D3    // Tat adc
-; 0001 00D4    // ADCSRA=(0<<ADEN) | (0<<ADSC) | (0<<ADFR) | (0<<ADIF) | (0<<ADIE) | (0<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
-; 0001 00D5    g_count_adc_0 = 0;
+; 0001 00F0    // Tat adc
+; 0001 00F1    // ADCSRA=(0<<ADEN) | (0<<ADSC) | (0<<ADFR) | (0<<ADIF) | (0<<ADIE) | (0<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
+; 0001 00F2    g_count_adc_0 = 0;
 	CLR  R6
 	CLR  R7
-; 0001 00D6    CONTROL_5V_12V = RUN_5V;
+; 0001 00F3    CONTROL_5V_12V = RUN_5V;
 	CBI  0x15,1
-; 0001 00D7    QUAT = STATUS_OFF;
+; 0001 00F4    QUAT = STATUS_OFF;
 	CBI  0x15,0
-; 0001 00D8    SENSOR_1 = STATUS_OFF;
+; 0001 00F5    SENSOR_1 = STATUS_OFF;
 	CBI  0x15,3
-; 0001 00D9    g_connect_mode = OFF_MODE;
+; 0001 00F6    g_connect_mode = OFF_MODE;
 	LDI  R30,LOW(0)
 	STS  _g_connect_mode,R30
 	STS  _g_connect_mode+1,R30
-; 0001 00DA }
+; 0001 00F7 }
 	RET
 ; .FEND
 ;
 ;
 ;int strcasecmp(const char *s1, const char *s2) {
-; 0001 00DD int strcasecmp(const char *s1, const char *s2) {
+; 0001 00FA int strcasecmp(const char *s1, const char *s2) {
 _strcasecmp:
 ; .FSTART _strcasecmp
-; 0001 00DE     const unsigned char *us1 = (const unsigned char *)s1,
-; 0001 00DF                         *us2 = (const unsigned char *)s2;
-; 0001 00E0 
-; 0001 00E1     while (tolower(*us1) == tolower(*us2++))
+; 0001 00FB     const unsigned char *us1 = (const unsigned char *)s1,
+; 0001 00FC                         *us2 = (const unsigned char *)s2;
+; 0001 00FD 
+; 0001 00FE     while (tolower(*us1) == tolower(*us2++))
 	ST   -Y,R27
 	ST   -Y,R26
 	CALL __SAVELOCR4
@@ -2374,7 +2470,7 @@ _strcasecmp:
 ;	*us2 -> R18,R19
 	__GETWRS 16,17,6
 	__GETWRS 18,19,4
-_0x2006D:
+_0x2007C:
 	MOVW R26,R16
 	LD   R26,X
 	CALL _tolower
@@ -2385,21 +2481,21 @@ _0x2006D:
 	CALL _tolower
 	POP  R26
 	CP   R30,R26
-	BRNE _0x2006F
-; 0001 00E2         if (*us1++ == '\0')
+	BRNE _0x2007E
+; 0001 00FF         if (*us1++ == '\0')
 	MOVW R26,R16
 	__ADDWRN 16,17,1
 	LD   R30,X
 	CPI  R30,0
-	BRNE _0x20070
-; 0001 00E3             return (0);
+	BRNE _0x2007F
+; 0001 0100             return (0);
 	LDI  R30,LOW(0)
 	LDI  R31,HIGH(0)
 	RJMP _0x20A0008
-; 0001 00E4     return (tolower(*us1) - tolower(*--us2));
-_0x20070:
-	RJMP _0x2006D
-_0x2006F:
+; 0001 0101     return (tolower(*us1) - tolower(*--us2));
+_0x2007F:
+	RJMP _0x2007C
+_0x2007E:
 	MOVW R26,R16
 	LD   R26,X
 	CALL _tolower
@@ -2421,98 +2517,126 @@ _0x20A0008:
 	CALL __LOADLOCR4
 	ADIW R28,8
 	RET
-; 0001 00E5 }
+; 0001 0102 }
 ; .FEND
 ;
 ;void execute_command(char* buf)
-; 0001 00E8 {
+; 0001 0105 {
 _execute_command:
 ; .FSTART _execute_command
-; 0001 00E9    char* temp_cmd;
-; 0001 00EA    temp_cmd = strtok(buf, ",");
+; 0001 0106    char* temp_cmd;
+; 0001 0107    temp_cmd = strtok(buf, ",");
 	CALL SUBOPT_0x1
 ;	*buf -> Y+2
 ;	*temp_cmd -> R16,R17
 	LDD  R30,Y+2
 	LDD  R31,Y+2+1
-	CALL SUBOPT_0x7
-; 0001 00EB    if(!strcasecmp(temp_cmd,"CONNECT"))
+	CALL SUBOPT_0x8
+; 0001 0108    if(!strcasecmp(temp_cmd,"CONNECT"))
 	ST   -Y,R17
 	ST   -Y,R16
-	__POINTW2MN _0x20072,0
+	__POINTW2MN _0x20081,0
 	RCALL _strcasecmp
 	SBIW R30,0
-	BRNE _0x20071
-; 0001 00EC    {
-; 0001 00ED       // Bat quat to trong 1 phut, sau do bat sensor
-; 0001 00EE       connect_avr();
+	BRNE _0x20080
+; 0001 0109    {
+; 0001 010A       // Bat quat to trong 1 phut, sau do bat sensor
+; 0001 010B       connect_avr();
 	RCALL _connect_avr
-; 0001 00EF    }
-; 0001 00F0    else if(!strcasecmp(temp_cmd,"OFF"))
-	RJMP _0x20073
-_0x20071:
+; 0001 010C    }
+; 0001 010D    else if(!strcasecmp(temp_cmd,"OFF"))
+	RJMP _0x20082
+_0x20080:
 	ST   -Y,R17
 	ST   -Y,R16
-	__POINTW2MN _0x20072,8
+	__POINTW2MN _0x20081,8
 	RCALL _strcasecmp
 	SBIW R30,0
-	BRNE _0x20074
-; 0001 00F1    {
-; 0001 00F2       // Tat quat nho, dung lay du lieu
-; 0001 00F3       turnoff();
+	BRNE _0x20083
+; 0001 010E    {
+; 0001 010F       // Tat quat nho, dung lay du lieu
+; 0001 0110       turnoff();
 	RCALL _turnoff
-; 0001 00F4    }
-; 0001 00F5    else if(!strcasecmp(temp_cmd,"threshold"))
-	RJMP _0x20075
-_0x20074:
+; 0001 0111    }
+; 0001 0112    else if(!strcasecmp(temp_cmd,"threshold"))
+	RJMP _0x20084
+_0x20083:
 	ST   -Y,R17
 	ST   -Y,R16
-	__POINTW2MN _0x20072,12
+	__POINTW2MN _0x20081,12
 	RCALL _strcasecmp
 	SBIW R30,0
-	BRNE _0x20076
-; 0001 00F6    {
-; 0001 00F7       g_led_control = 1;
+	BRNE _0x20085
+; 0001 0113    {
+; 0001 0114       g_led_control = 1;
 	LDI  R30,LOW(1)
 	LDI  R31,HIGH(1)
 	STS  _g_led_control,R30
 	STS  _g_led_control+1,R31
-; 0001 00F8       temp_cmd = strtok(NULL, ",");
+; 0001 0115       temp_cmd = strtok(NULL, ",");
 	LDI  R30,LOW(0)
 	LDI  R31,HIGH(0)
-	CALL SUBOPT_0x7
-; 0001 00F9       if(temp_cmd != NULL)
+	CALL SUBOPT_0x8
+; 0001 0116       if(temp_cmd != NULL)
 	MOV  R0,R16
 	OR   R0,R17
-	BREQ _0x20077
-; 0001 00FA       {
-; 0001 00FB          g_temperature_not_ready_value = atoi(temp_cmd);
+	BREQ _0x20086
+; 0001 0117       {
+; 0001 0118          g_temperature_not_ready_value = atoi(temp_cmd);
 	MOVW R26,R16
 	CALL _atoi
 	STS  _g_temperature_not_ready_value_G001,R30
 	STS  _g_temperature_not_ready_value_G001+1,R31
-; 0001 00FC          memset(g_uart_send_buf,0,sizeof(g_uart_send_buf));
-	CALL SUBOPT_0x5
-; 0001 00FD          //sprintf(g_uart_send_buf, "thres,%d;", g_temperature_not_ready_value);
-; 0001 00FE          send_string(g_uart_send_buf);
-	LDI  R26,LOW(_g_uart_send_buf)
-	LDI  R27,HIGH(_g_uart_send_buf)
-	RCALL _send_string
-; 0001 00FF       }
-; 0001 0100    }
-_0x20077:
-; 0001 0101 }
-_0x20076:
-_0x20075:
-_0x20073:
+; 0001 0119          //memset(g_uart_send_buf,0,sizeof(g_uart_send_buf));
+; 0001 011A          //sprintf(g_uart_send_buf, "thres,%d;", g_temperature_not_ready_value);
+; 0001 011B          //send_string(g_uart_send_buf);
+; 0001 011C       }
+; 0001 011D    }
+_0x20086:
+; 0001 011E    else if(!strcasecmp(temp_cmd,"gas"))
+	RJMP _0x20087
+_0x20085:
+	ST   -Y,R17
+	ST   -Y,R16
+	__POINTW2MN _0x20081,22
+	RCALL _strcasecmp
+	SBIW R30,0
+	BRNE _0x20088
+; 0001 011F    {
+; 0001 0120       g_alarm_control = 1;
+	LDI  R30,LOW(1)
+	LDI  R31,HIGH(1)
+	STS  _g_alarm_control,R30
+	STS  _g_alarm_control+1,R31
+; 0001 0121       temp_cmd = strtok(NULL, ",");
+	LDI  R30,LOW(0)
+	LDI  R31,HIGH(0)
+	CALL SUBOPT_0x8
+; 0001 0122       if(temp_cmd != NULL)
+	MOV  R0,R16
+	OR   R0,R17
+	BREQ _0x20089
+; 0001 0123       {
+; 0001 0124          g_gas_alarm_mode = (enum gas_alarm_mode_e)atoi(temp_cmd);
+	MOVW R26,R16
+	CALL _atoi
+	MOV  R4,R30
+; 0001 0125       }
+; 0001 0126    }
+_0x20089:
+; 0001 0127 }
+_0x20088:
+_0x20087:
+_0x20084:
+_0x20082:
 	LDD  R17,Y+1
 	LDD  R16,Y+0
 	JMP  _0x20A0007
 ; .FEND
 
 	.DSEG
-_0x20072:
-	.BYTE 0x16
+_0x20081:
+	.BYTE 0x1A
 
 	.CSEG
 _memset:
@@ -2649,7 +2773,7 @@ _0x2000004:
 	STD  Y+4,R30
 	STD  Y+4+1,R31
 _0x2000003:
-	CALL SUBOPT_0x8
+	CALL SUBOPT_0x9
 	CALL _strspnf
 	LDD  R26,Y+4
 	LDD  R27,Y+4+1
@@ -2669,7 +2793,7 @@ _0x2000003:
 	LDI  R31,HIGH(0)
 	RJMP _0x20A0004
 _0x2000005:
-	CALL SUBOPT_0x8
+	CALL SUBOPT_0x9
 	CALL _strpbrkf
 	MOVW R16,R30
 	SBIW R30,0
@@ -2808,7 +2932,7 @@ _0x2020016:
 	LDI  R17,LOW(1)
 	RJMP _0x202001E
 _0x202001D:
-	CALL SUBOPT_0x9
+	CALL SUBOPT_0xA
 _0x202001E:
 	RJMP _0x202001B
 _0x202001C:
@@ -2816,7 +2940,7 @@ _0x202001C:
 	BRNE _0x202001F
 	CPI  R18,37
 	BRNE _0x2020020
-	CALL SUBOPT_0x9
+	CALL SUBOPT_0xA
 	RJMP _0x20200CC
 _0x2020020:
 	LDI  R17,LOW(2)
@@ -2873,26 +2997,26 @@ _0x2020029:
 	MOV  R30,R18
 	CPI  R30,LOW(0x63)
 	BRNE _0x202002F
-	CALL SUBOPT_0xA
+	CALL SUBOPT_0xB
 	LDD  R30,Y+16
 	LDD  R31,Y+16+1
 	LDD  R26,Z+4
 	ST   -Y,R26
-	CALL SUBOPT_0xB
+	CALL SUBOPT_0xC
 	RJMP _0x2020030
 _0x202002F:
 	CPI  R30,LOW(0x73)
 	BRNE _0x2020032
-	CALL SUBOPT_0xA
-	CALL SUBOPT_0xC
+	CALL SUBOPT_0xB
+	CALL SUBOPT_0xD
 	CALL _strlen
 	MOV  R17,R30
 	RJMP _0x2020033
 _0x2020032:
 	CPI  R30,LOW(0x70)
 	BRNE _0x2020035
-	CALL SUBOPT_0xA
-	CALL SUBOPT_0xC
+	CALL SUBOPT_0xB
+	CALL SUBOPT_0xD
 	CALL _strlenf
 	MOV  R17,R30
 	ORI  R16,LOW(8)
@@ -2937,8 +3061,8 @@ _0x2020040:
 _0x202003D:
 	SBRS R16,2
 	RJMP _0x2020042
-	CALL SUBOPT_0xA
-	CALL SUBOPT_0xD
+	CALL SUBOPT_0xB
+	CALL SUBOPT_0xE
 	LDD  R26,Y+11
 	TST  R26
 	BRPL _0x2020043
@@ -2958,8 +3082,8 @@ _0x2020044:
 _0x2020045:
 	RJMP _0x2020046
 _0x2020042:
-	CALL SUBOPT_0xA
-	CALL SUBOPT_0xD
+	CALL SUBOPT_0xB
+	CALL SUBOPT_0xE
 _0x2020046:
 _0x2020036:
 	SBRC R16,0
@@ -2982,7 +3106,7 @@ _0x202004D:
 _0x202004B:
 	LDI  R18,LOW(32)
 _0x202004E:
-	CALL SUBOPT_0x9
+	CALL SUBOPT_0xA
 	SUBI R21,LOW(1)
 	RJMP _0x2020048
 _0x202004A:
@@ -3008,7 +3132,7 @@ _0x2020053:
 	STD  Y+6,R26
 	STD  Y+6+1,R27
 _0x2020054:
-	CALL SUBOPT_0x9
+	CALL SUBOPT_0xA
 	CPI  R21,0
 	BREQ _0x2020055
 	SUBI R21,LOW(1)
@@ -3087,7 +3211,7 @@ _0x20200CD:
 	RJMP _0x202006A
 	ANDI R16,LOW(251)
 	ST   -Y,R20
-	CALL SUBOPT_0xB
+	CALL SUBOPT_0xC
 	CPI  R21,0
 	BREQ _0x202006B
 	SUBI R21,LOW(1)
@@ -3095,7 +3219,7 @@ _0x202006B:
 _0x202006A:
 _0x2020069:
 _0x2020061:
-	CALL SUBOPT_0x9
+	CALL SUBOPT_0xA
 	CPI  R21,0
 	BREQ _0x202006C
 	SUBI R21,LOW(1)
@@ -3117,7 +3241,7 @@ _0x202006E:
 	SUBI R21,LOW(1)
 	LDI  R30,LOW(32)
 	ST   -Y,R30
-	CALL SUBOPT_0xB
+	CALL SUBOPT_0xC
 	RJMP _0x202006E
 _0x2020070:
 _0x202006D:
@@ -3141,7 +3265,7 @@ _sprintf:
 	MOV  R15,R24
 	SBIW R28,6
 	CALL __SAVELOCR4
-	CALL SUBOPT_0xE
+	CALL SUBOPT_0xF
 	SBIW R30,0
 	BRNE _0x2020072
 	LDI  R30,LOW(65535)
@@ -3152,7 +3276,7 @@ _0x2020072:
 	ADIW R26,6
 	CALL __ADDW2R15
 	MOVW R16,R26
-	CALL SUBOPT_0xE
+	CALL SUBOPT_0xF
 	STD  Y+6,R30
 	STD  Y+6+1,R31
 	LDI  R30,LOW(0)
@@ -3307,6 +3431,8 @@ _g_temperature_not_ready_value_G001:
 	.BYTE 0x2
 _g_led_control:
 	.BYTE 0x2
+_g_alarm_control:
+	.BYTE 0x2
 _g_connect_mode:
 	.BYTE 0x2
 _g_uart_send_buf:
@@ -3319,7 +3445,7 @@ __seed_G102:
 	.BYTE 0x4
 
 	.CSEG
-;OPTIMIZER ADDED SUBROUTINE, CALLED 5 TIMES, CODE SIZE REDUCTION:21 WORDS
+;OPTIMIZER ADDED SUBROUTINE, CALLED 4 TIMES, CODE SIZE REDUCTION:15 WORDS
 SUBOPT_0x0:
 	ST   -Y,R31
 	ST   -Y,R30
@@ -3337,7 +3463,7 @@ SUBOPT_0x1:
 	ST   -Y,R16
 	RET
 
-;OPTIMIZER ADDED SUBROUTINE, CALLED 3 TIMES, CODE SIZE REDUCTION:3 WORDS
+;OPTIMIZER ADDED SUBROUTINE, CALLED 4 TIMES, CODE SIZE REDUCTION:6 WORDS
 SUBOPT_0x2:
 	LD   R30,X+
 	LD   R31,X+
@@ -3361,7 +3487,7 @@ SUBOPT_0x4:
 	SBIW R30,0
 	RET
 
-;OPTIMIZER ADDED SUBROUTINE, CALLED 4 TIMES, CODE SIZE REDUCTION:3 WORDS
+;OPTIMIZER ADDED SUBROUTINE, CALLED 3 TIMES, CODE SIZE REDUCTION:1 WORDS
 SUBOPT_0x5:
 	LDI  R30,LOW(_g_uart_send_buf)
 	LDI  R31,HIGH(_g_uart_send_buf)
@@ -3388,8 +3514,14 @@ SUBOPT_0x6:
 	LDI  R27,HIGH(_g_uart_send_buf)
 	JMP  _send_string
 
-;OPTIMIZER ADDED SUBROUTINE, CALLED 2 TIMES, CODE SIZE REDUCTION:2 WORDS
+;OPTIMIZER ADDED SUBROUTINE, CALLED 3 TIMES, CODE SIZE REDUCTION:1 WORDS
 SUBOPT_0x7:
+	LDS  R26,_g_alarm_control
+	LDS  R27,_g_alarm_control+1
+	RET
+
+;OPTIMIZER ADDED SUBROUTINE, CALLED 3 TIMES, CODE SIZE REDUCTION:7 WORDS
+SUBOPT_0x8:
 	ST   -Y,R31
 	ST   -Y,R30
 	__POINTW2FN _0x20000,16
@@ -3398,7 +3530,7 @@ SUBOPT_0x7:
 	RET
 
 ;OPTIMIZER ADDED SUBROUTINE, CALLED 2 TIMES, CODE SIZE REDUCTION:1 WORDS
-SUBOPT_0x8:
+SUBOPT_0x9:
 	LDD  R30,Y+4
 	LDD  R31,Y+4+1
 	ST   -Y,R31
@@ -3408,7 +3540,7 @@ SUBOPT_0x8:
 	RET
 
 ;OPTIMIZER ADDED SUBROUTINE, CALLED 5 TIMES, CODE SIZE REDUCTION:13 WORDS
-SUBOPT_0x9:
+SUBOPT_0xA:
 	ST   -Y,R18
 	LDD  R26,Y+13
 	LDD  R27,Y+13+1
@@ -3418,7 +3550,7 @@ SUBOPT_0x9:
 	RET
 
 ;OPTIMIZER ADDED SUBROUTINE, CALLED 5 TIMES, CODE SIZE REDUCTION:9 WORDS
-SUBOPT_0xA:
+SUBOPT_0xB:
 	LDD  R30,Y+16
 	LDD  R31,Y+16+1
 	SBIW R30,4
@@ -3427,7 +3559,7 @@ SUBOPT_0xA:
 	RET
 
 ;OPTIMIZER ADDED SUBROUTINE, CALLED 3 TIMES, CODE SIZE REDUCTION:3 WORDS
-SUBOPT_0xB:
+SUBOPT_0xC:
 	LDD  R26,Y+13
 	LDD  R27,Y+13+1
 	LDD  R30,Y+15
@@ -3436,7 +3568,7 @@ SUBOPT_0xB:
 	RET
 
 ;OPTIMIZER ADDED SUBROUTINE, CALLED 2 TIMES, CODE SIZE REDUCTION:4 WORDS
-SUBOPT_0xC:
+SUBOPT_0xD:
 	LDD  R26,Y+16
 	LDD  R27,Y+16+1
 	ADIW R26,4
@@ -3448,7 +3580,7 @@ SUBOPT_0xC:
 	RET
 
 ;OPTIMIZER ADDED SUBROUTINE, CALLED 2 TIMES, CODE SIZE REDUCTION:2 WORDS
-SUBOPT_0xD:
+SUBOPT_0xE:
 	LDD  R26,Y+16
 	LDD  R27,Y+16+1
 	ADIW R26,4
@@ -3458,7 +3590,7 @@ SUBOPT_0xD:
 	RET
 
 ;OPTIMIZER ADDED SUBROUTINE, CALLED 2 TIMES, CODE SIZE REDUCTION:1 WORDS
-SUBOPT_0xE:
+SUBOPT_0xF:
 	MOVW R26,R28
 	ADIW R26,12
 	CALL __ADDW2R15
